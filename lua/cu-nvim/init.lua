@@ -8,13 +8,14 @@ local action_state = require("telescope.actions.state")
 
 function CU.handle()
 	local data = CU.get_endpoint_data()
-    local env = CU.get_endpoint_env()
+	local env = CU.get_endpoint_env()
 	CU.render_fuzzy(data, env)
 end
 
 function CU.reuse()
-    local cmd = vim.g.cureuse
-    CU.execute(cmd)
+	local cmd = vim.g.cureuse
+	local output = vim.g.cureuse_output
+	CU.execute(cmd, output)
 end
 
 function CU.get_endpoint_data()
@@ -30,12 +31,12 @@ function CU.get_endpoint_env()
 	local file = io.open("/home/kristiaan/Octo/api_env", "r")
 	local arr = {}
 	for line in file:lines() do
-        local split_line = vim.fn.split(line, ';')
-        local split_trimmed = {}
-        for _, split in ipairs(split_line) do
-            local trim = vim.fn.trim(split)
-            table.insert(split_trimmed, trim)
-        end
+		local split_line = vim.fn.split(line, ";")
+		local split_trimmed = {}
+		for _, split in ipairs(split_line) do
+			local trim = vim.fn.trim(split)
+			table.insert(split_trimmed, trim)
+		end
 		table.insert(arr, split_trimmed)
 	end
 	return arr
@@ -56,7 +57,8 @@ function CU.render_fuzzy(data, env)
 					local selection = action_state.get_selected_entry()
 					local cmd, output = CU.create_cmd(selection[1], env)
 					CU.execute(cmd, output)
-                    vim.g.cureuse = cmd
+					vim.g.cureuse = cmd
+					vim.g.cureuse_output = output
 				end)
 				return true
 			end,
@@ -69,44 +71,42 @@ function CU.render_fuzzy(data, env)
 end
 
 function CU.create_cmd(selection, env)
-
-    local url = ""
-    local key = ""
-    local output = ""
+	local url = ""
+	local key = ""
+	local output = ""
 
 	local sections = vim.fn.split(selection, ";")
-    for _, api in ipairs(env) do
-        if api[1] == vim.fn.trim(sections[1]) then
-            url = api[2]
-            key = api[3]
-            output = api[4]
-        end
-    end
+	for _, api in ipairs(env) do
+		if api[1] == vim.fn.trim(sections[1]) then
+			url = api[2]
+			key = api[3]
+			output = api[4]
+		end
+	end
 
-    local cmd = '"' .. url .. string.sub(vim.fn.trim(sections[2]), 2)
-    if key ~= "" then
-        cmd = cmd .. ' -H "x-api-key: ' .. key .. '"'
-    end
+	local cmd = '"' .. url .. string.sub(vim.fn.trim(sections[2]), 2)
+	if key ~= "" then
+		cmd = cmd .. ' -H "x-api-key: ' .. key .. '"'
+	end
 
-    return cmd, output
+	return cmd, output
 end
 
 function CU.execute(cmd, output)
-    print("Command: " .. vim.inspect(cmd))
 	JobId = vim.fn.jobstart("curl --silent --show-error " .. cmd, {
 		stdout_buffered = true,
 		stderr_buffered = true,
 		on_stdout = function(_, data, _)
-            local all = {}
+			local all = {}
 			if data[1] ~= "" then
-                if string.sub(data[1],1,1) == '{' and output == "jq" then
-                    CU.prettify(data, cmd)
-                else
-                    table.insert(all, "curl ".. cmd)
-                    table.insert(all, "")
-                    table.insert(all, data[1])
-                    CU.render(all)
-                end
+				if (string.sub(data[1], 1, 1) == "{" or string.sub(data[1], 1, 1) == "[") and output == "jq" then
+					CU.prettify(data, cmd)
+				else
+					table.insert(all, "curl " .. cmd)
+					table.insert(all, "")
+					table.insert(all, data[1])
+					CU.render(all)
+				end
 			end
 		end,
 		on_stderr = function(_, err, _)
@@ -122,14 +122,14 @@ function CU.prettify(resp, cmd)
 		stdout_buffered = true,
 		stderr_buffered = true,
 		on_stdout = function(_, data, _)
-            local all = {}
+			local all = {}
 			if data[1] ~= "" then
-                table.insert(all, "curl ".. cmd)
-                table.insert(all, "")
-                for _, v in ipairs(data) do
-                    table.insert(all, v)
-                end
-                CU.render(all)
+				table.insert(all, "curl " .. cmd)
+				table.insert(all, "")
+				for _, v in ipairs(data) do
+					table.insert(all, v)
+				end
+				CU.render(all)
 			end
 		end,
 		on_stderr = function(_, err, _)
@@ -141,7 +141,7 @@ function CU.prettify(resp, cmd)
 end
 
 function CU.render(data, opts)
-    opts = opts or {}
+	opts = opts or {}
 	opts["lines"] = data
 	opts["buf"] = vim.g.cubuf
 	local window = Window:new(opts)
@@ -154,7 +154,6 @@ function CU.render(data, opts)
 	else
 		window:fill(vim.g.cubuf, vim.g.cuwin)
 	end
-
 end
 
 function CU.window_valid()
